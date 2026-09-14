@@ -1,0 +1,13 @@
+{
+  "name": "爪痕 - バドミントンコート予約",
+  "short_name": "爪痕",
+  "description": "大学体育館のバドミントンコートをオンラインで予約できるシステム",
+  "start_url": "/reserve",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#047857",
+  "lang": "ja",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
