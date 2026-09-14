@@ -130,6 +130,13 @@ const ja = {
     rosterReplaced: "{n}件の名簿を登録しました。",
     rosterEmpty: "有効な行がありません。",
     feeExempt: "手数料免除",
+    payments: "決済管理",
+    onlyUnpaid: "未決済のみ表示",
+    noPaymentItems: "対象の項目はありません。",
+    paid: "決済済み",
+    unpaid: "未決済",
+    paymentAmount: "金額: {amount}",
+    markPaid: "決済",
   },
   common: {
     back: "戻る",

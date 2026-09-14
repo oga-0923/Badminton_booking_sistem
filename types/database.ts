@@ -64,6 +64,7 @@ export type Reservation = {
   hold_expires_at: string | null;
   stripe_payment_intent_id: string | null;
   amount: number;
+  paid: boolean;
   cancelled_at: string | null;
   refunded_at: string | null;
   created_at: string;

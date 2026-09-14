@@ -67,6 +67,7 @@ export async function POST(request: Request) {
       end_time: endTime,
       status: "confirmed",
       amount,
+      paid: amount === 0,
     })
     .select()
     .single();

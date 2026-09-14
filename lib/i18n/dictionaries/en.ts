@@ -132,6 +132,13 @@ const en: Dictionary = {
     rosterReplaced: "Registered {n} students.",
     rosterEmpty: "No valid rows found.",
     feeExempt: "Fee Exempt",
+    payments: "Payments",
+    onlyUnpaid: "Show unpaid only",
+    noPaymentItems: "No items to show.",
+    paid: "Paid",
+    unpaid: "Unpaid",
+    paymentAmount: "Amount: {amount}",
+    markPaid: "Mark Paid",
   },
   common: {
     back: "Back",

@@ -132,6 +132,13 @@ const zh: Dictionary = {
     rosterReplaced: "已登记{n}条名单。",
     rosterEmpty: "没有有效的行。",
     feeExempt: "免除手续费",
+    payments: "收款管理",
+    onlyUnpaid: "仅显示未付款",
+    noPaymentItems: "没有需要显示的项目。",
+    paid: "已付款",
+    unpaid: "未付款",
+    paymentAmount: "金额: {amount}",
+    markPaid: "标记为已付款",
   },
   common: {
     back: "返回",
