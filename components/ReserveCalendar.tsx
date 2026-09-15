@@ -34,7 +34,12 @@ interface OwnReservation {
 type PendingAction =
   | { type: "book"; courtId: string; courtName: string; start: string; end: string }
   | { type: "manage"; reservationId: string; courtName: string; start: string; end: string; cancellable: boolean }
-  | { type: "qr"; reservationId: string };
+  | { type: "qr"; reservationId: string; courtName: string; start: string; end: string };
+
+interface QrRentalItem {
+  type: Equipment["type"];
+  quantity: number;
+}
 
 export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarProps) {
   const { t, locale } = useI18n();
@@ -49,6 +54,7 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
   const [racketQty, setRacketQty] = useState(0);
   const [shuttleQty, setShuttleQty] = useState(0);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrRentals, setQrRentals] = useState<QrRentalItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const slots = useMemo(() => buildTimeSlots(settings), [settings]);
@@ -96,11 +102,27 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
     if (pending?.type !== "qr") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setQrDataUrl(null);
+      setQrRentals([]);
       return;
     }
     QRCode.toDataURL(pending.reservationId, { width: 240, margin: 1 }).then((url) => {
       setQrDataUrl(url);
     });
+
+    const supabase = createClient();
+    supabase
+      .from("equipment_loans")
+      .select("quantity, equipment(type)")
+      .eq("reservation_id", pending.reservationId)
+      .eq("status", "borrowed")
+      .then(({ data }) => {
+        setQrRentals(
+          (data ?? []).map((r) => {
+            const eq = Array.isArray(r.equipment) ? r.equipment[0] : r.equipment;
+            return { type: eq?.type ?? "racket", quantity: r.quantity };
+          })
+        );
+      });
   }, [pending]);
 
   const shiftDate = (deltaDays: number) => {
@@ -353,37 +375,44 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
             <div className="mb-4 flex flex-col gap-2 rounded-md border border-slate-200 p-3 dark:border-slate-700">
               <p className="text-xs font-medium text-slate-500">{t("reserve.rentalWithBooking")}</p>
               {racket && (
-                <div className="flex items-center justify-between text-sm">
-                  <span>
-                    {t("rental.racket")} ({t("rental.available", { n: racket.available })})
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={racket.available}
-                    value={racketQty}
-                    onChange={(e) => setRacketQty(Math.max(0, Math.min(racket.available, Number(e.target.value) || 0)))}
-                    className="w-16 rounded-md border border-slate-300 px-2 py-1 text-center dark:border-slate-700 dark:bg-slate-900"
-                  />
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>
+                      {t("rental.racket")} ({t("rental.available", { n: racket.available })})
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={racketQty}
+                      onChange={(e) => setRacketQty(Math.max(0, Number(e.target.value) || 0))}
+                      className="w-16 rounded-md border border-slate-300 px-2 py-1 text-center dark:border-slate-700 dark:bg-slate-900"
+                    />
+                  </div>
+                  {racketQty > racket.available && (
+                    <p className="text-xs text-red-600">{t("rental.insufficientStock")}</p>
+                  )}
                 </div>
               )}
               {shuttle && (
-                <div className="flex items-center justify-between text-sm">
-                  <span>
-                    {t("rental.shuttle")} ({t("rental.available", { n: shuttle.available })})
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={shuttle.available}
-                    value={shuttleQty}
-                    onChange={(e) =>
-                      setShuttleQty(Math.max(0, Math.min(shuttle.available, Number(e.target.value) || 0)))
-                    }
-                    className="w-16 rounded-md border border-slate-300 px-2 py-1 text-center dark:border-slate-700 dark:bg-slate-900"
-                  />
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>
+                      {t("rental.shuttle")} ({t("rental.available", { n: shuttle.available })})
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={shuttleQty}
+                      onChange={(e) => setShuttleQty(Math.max(0, Number(e.target.value) || 0))}
+                      className="w-16 rounded-md border border-slate-300 px-2 py-1 text-center dark:border-slate-700 dark:bg-slate-900"
+                    />
+                  </div>
+                  {shuttleQty > shuttle.available && (
+                    <p className="text-xs text-red-600">{t("rental.insufficientStock")}</p>
+                  )}
                 </div>
               )}
+              {!racket && !shuttle && <p className="text-xs text-slate-400">{t("reserve.noEquipment")}</p>}
             </div>
 
             <div className="flex justify-end gap-2">
@@ -398,7 +427,11 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
               <button
                 type="button"
                 onClick={submitBooking}
-                disabled={submitting}
+                disabled={
+                  submitting ||
+                  (racket ? racketQty > racket.available : false) ||
+                  (shuttle ? shuttleQty > shuttle.available : false)
+                }
                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
               >
                 {t("common.confirm")}
@@ -426,7 +459,15 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
               </button>
               <button
                 type="button"
-                onClick={() => setPending({ type: "qr", reservationId: pending.reservationId })}
+                onClick={() =>
+                  setPending({
+                    type: "qr",
+                    reservationId: pending.reservationId,
+                    courtName: pending.courtName,
+                    start: pending.start,
+                    end: pending.end,
+                  })
+                }
                 className="flex items-center justify-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600"
               >
                 <QrCode className="h-4 w-4" aria-hidden />
@@ -460,6 +501,24 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
                 {t("common.loading")}
               </div>
             )}
+
+            <div className="w-full rounded-md border border-slate-200 p-3 text-sm dark:border-slate-700">
+              <p className="mb-1 text-xs font-medium text-slate-500">{t("reserve.reservationInfo")}</p>
+              <p>{pending.courtName}</p>
+              <p>
+                {dateLabel} {pending.start}–{pending.end}
+              </p>
+              {qrRentals.length > 0 && (
+                <ul className="mt-1 text-slate-600 dark:text-slate-300">
+                  {qrRentals.map((r, i) => (
+                    <li key={i}>
+                      {t(r.type === "racket" ? "rental.racket" : "rental.shuttle")} × {r.quantity}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <p className="text-center text-xs text-slate-500">{t("reserve.qrHint")}</p>
             <button
               type="button"

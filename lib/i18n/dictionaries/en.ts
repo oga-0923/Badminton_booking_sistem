@@ -72,6 +72,8 @@ const en: Dictionary = {
     showQr: "QR Code",
     discardBooking: "Discard Booking",
     qrHint: "Show this QR code at the front desk.",
+    reservationInfo: "Reservation Info",
+    noEquipment: "No rental equipment has been registered yet.",
     prevDay: "Previous day",
     nextDay: "Next day",
     today: "Today",

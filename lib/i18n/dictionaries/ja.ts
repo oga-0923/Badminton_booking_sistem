@@ -70,6 +70,8 @@ const ja = {
     showQr: "QRコード",
     discardBooking: "予約を破棄",
     qrHint: "受付でこのQRコードを提示してください。",
+    reservationInfo: "予約情報",
+    noEquipment: "レンタル可能な備品がまだ登録されていません。",
     prevDay: "前日",
     nextDay: "翌日",
     today: "今日",

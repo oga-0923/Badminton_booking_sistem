@@ -72,6 +72,8 @@ const zh: Dictionary = {
     showQr: "二维码",
     discardBooking: "取消该预约",
     qrHint: "请在前台出示此二维码。",
+    reservationInfo: "预约信息",
+    noEquipment: "尚未登记可租借的物品。",
     prevDay: "前一天",
     nextDay: "后一天",
     today: "今天",
