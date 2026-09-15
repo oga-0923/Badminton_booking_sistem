@@ -38,6 +38,8 @@ const en: Dictionary = {
     title: "Complete Your Profile",
     fullName: "Full Name",
     studentId: "Student ID",
+    studentIdVerified: "Matched the student roster (verified)",
+    studentIdNotVerified: "Not found on the student roster (not verified)",
     phone: "Phone Number",
     save: "Save",
     saved: "Profile saved",

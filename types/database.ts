@@ -226,6 +226,10 @@ export interface Database {
         Args: { p_user_id: string };
         Returns: boolean;
       };
+      check_student_id: {
+        Args: { p_student_id: string };
+        Returns: boolean;
+      };
     };
     Enums: {
       user_role: UserRole;

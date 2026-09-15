@@ -36,6 +36,8 @@ const ja = {
     title: "プロフィール登録",
     fullName: "氏名",
     studentId: "学籍番号",
+    studentIdVerified: "学生名簿と一致しました(認定済み)",
+    studentIdNotVerified: "学生名簿と一致しません(未認定)",
     phone: "連絡先電話番号",
     save: "保存する",
     saved: "プロフィールを保存しました",

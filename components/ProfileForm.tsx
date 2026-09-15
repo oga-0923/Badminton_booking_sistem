@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import { createClient } from "@/lib/supabase/client";
+import { CheckCircle2, XCircle } from "lucide-react";
 
 interface ProfileFormProps {
   userId: string;
@@ -20,6 +21,28 @@ export function ProfileForm({ userId, email, initial }: ProfileFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [verified, setVerified] = useState<boolean | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    const trimmed = studentId.trim();
+    if (!trimmed) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setVerified(null);
+      return;
+    }
+
+    setChecking(true);
+    const timer = setTimeout(() => {
+      const supabase = createClient();
+      supabase.rpc("check_student_id", { p_student_id: trimmed }).then(({ data }) => {
+        setVerified(Boolean(data));
+        setChecking(false);
+      });
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [studentId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,6 +108,25 @@ export function ProfileForm({ userId, email, initial }: ProfileFormProps) {
             onChange={(e) => setStudentId(e.target.value)}
             className="rounded-md border border-slate-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
           />
+          {studentId.trim() && !checking && verified !== null && (
+            <span
+              className={`flex items-center gap-1 text-xs ${
+                verified ? "text-emerald-600" : "text-amber-600"
+              }`}
+            >
+              {verified ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                  {t("profile.studentIdVerified")}
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-3.5 w-3.5" aria-hidden />
+                  {t("profile.studentIdNotVerified")}
+                </>
+              )}
+            </span>
+          )}
         </label>
 
         <label className="flex flex-col gap-1 text-sm">

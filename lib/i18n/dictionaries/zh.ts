@@ -38,6 +38,8 @@ const zh: Dictionary = {
     title: "完善个人资料",
     fullName: "姓名",
     studentId: "学号",
+    studentIdVerified: "与学生名单匹配(已认证)",
+    studentIdNotVerified: "与学生名单不匹配(未认证)",
     phone: "联系电话",
     save: "保存",
     saved: "个人资料已保存",
