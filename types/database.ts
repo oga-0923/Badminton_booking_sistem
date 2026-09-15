@@ -65,6 +65,7 @@ export type Reservation = {
   stripe_payment_intent_id: string | null;
   amount: number;
   paid: boolean;
+  checked_in_at: string | null;
   cancelled_at: string | null;
   refunded_at: string | null;
   created_at: string;
@@ -229,6 +230,21 @@ export interface Database {
       check_student_id: {
         Args: { p_student_id: string };
         Returns: boolean;
+      };
+      get_checkin_info: {
+        Args: { p_reservation_id: string };
+        Returns: {
+          id: string;
+          court_name: string;
+          reservation_date: string;
+          start_time: string;
+          end_time: string;
+          status: ReservationStatus;
+          full_name: string;
+          student_id: string | null;
+          checked_in_at: string | null;
+          rentals: { type: EquipmentType; quantity: number }[];
+        }[];
       };
     };
     Enums: {

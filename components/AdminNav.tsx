@@ -10,6 +10,7 @@ export function AdminNav({ isAdmin }: { isAdmin: boolean }) {
 
   const items = [
     { href: "/admin", label: t("admin.dashboard") },
+    { href: "/admin/checkin", label: t("admin.checkin") },
     { href: "/admin/payments", label: t("admin.payments") },
     { href: "/admin/courts", label: t("admin.courts") },
     { href: "/admin/reservations", label: t("admin.reservations") },

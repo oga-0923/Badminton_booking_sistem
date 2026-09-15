@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSlotAligned, addMinutesToTime } from "@/lib/reservation/slots";
-import { isWithinBookingWindow } from "@/lib/reservation/rules";
+import { isWithinBookingWindow, isSlotBookable } from "@/lib/reservation/rules";
+import type { EquipmentType } from "@/types/database";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
+
+function toQuantity(value: unknown): number {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -20,6 +26,8 @@ export async function POST(request: Request) {
   const courtId = body?.court_id;
   const reservationDate = body?.reservation_date;
   const startTime = body?.start_time;
+  const racketQty = toQuantity(body?.racket_quantity);
+  const shuttleQty = toQuantity(body?.shuttle_quantity);
 
   if (
     typeof courtId !== "string" ||
@@ -44,6 +52,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_time_slot" }, { status: 400 });
   }
 
+  if (!isSlotBookable(reservationDate, startTime)) {
+    return NextResponse.json({ error: "slot_in_past" }, { status: 400 });
+  }
+
   const { data: isClosed } = await supabase.rpc("is_court_closed", {
     p_court_id: courtId,
     p_date: reservationDate,
@@ -54,10 +66,41 @@ export async function POST(request: Request) {
 
   const endTime = addMinutesToTime(startTime, settings.slot_duration_minutes);
 
-  const { data: profile } = await supabase.from("profiles").select("is_fee_exempt").eq("id", user.id).single();
-  const amount = profile?.is_fee_exempt ? 0 : settings.price_per_slot;
+  const [{ data: profile }, { data: verified }, { data: equipmentList }, { data: activeLoans }] = await Promise.all([
+    supabase.from("profiles").select("is_fee_exempt").eq("id", user.id).single(),
+    supabase.rpc("is_verified_student", { p_user_id: user.id }),
+    racketQty > 0 || shuttleQty > 0 ? supabase.from("equipment").select("id, type, total_quantity") : Promise.resolve({ data: null }),
+    racketQty > 0 || shuttleQty > 0
+      ? supabase.from("equipment_loans").select("equipment_id, quantity").eq("status", "borrowed")
+      : Promise.resolve({ data: null }),
+  ]);
 
-  const { data, error } = await supabase
+  const isFeeExempt = Boolean(profile?.is_fee_exempt) || Boolean(verified);
+  const amount = isFeeExempt ? 0 : settings.price_per_slot;
+
+  const wantedByType: Partial<Record<EquipmentType, number>> = { racket: racketQty, shuttle: shuttleQty };
+  const equipmentByType = new Map<EquipmentType, { id: string; total_quantity: number }>();
+  for (const e of equipmentList ?? []) {
+    equipmentByType.set(e.type, { id: e.id, total_quantity: e.total_quantity });
+  }
+  const borrowedByEquipment = new Map<string, number>();
+  for (const l of activeLoans ?? []) {
+    borrowedByEquipment.set(l.equipment_id, (borrowedByEquipment.get(l.equipment_id) ?? 0) + l.quantity);
+  }
+
+  for (const [type, qty] of Object.entries(wantedByType) as [EquipmentType, number][]) {
+    if (qty <= 0) continue;
+    const equipment = equipmentByType.get(type);
+    if (!equipment) {
+      return NextResponse.json({ error: "equipment_not_found" }, { status: 400 });
+    }
+    const available = equipment.total_quantity - (borrowedByEquipment.get(equipment.id) ?? 0);
+    if (qty > available) {
+      return NextResponse.json({ error: "insufficient_stock", equipment_type: type }, { status: 409 });
+    }
+  }
+
+  const { data: reservation, error } = await supabase
     .from("reservations")
     .insert({
       court_id: courtId,
@@ -80,5 +123,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "insert_failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ reservation: data }, { status: 201 });
+  const loanInserts = (Object.entries(wantedByType) as [EquipmentType, number][])
+    .filter(([, qty]) => qty > 0)
+    .map(([type, qty]) => {
+      const equipment = equipmentByType.get(type)!;
+      return {
+        equipment_id: equipment.id,
+        reservation_id: reservation.id,
+        user_id: user.id,
+        quantity: qty,
+        status: "borrowed" as const,
+        has_student_id: isFeeExempt,
+        fee_amount: isFeeExempt ? 0 : settings.rental_fee_per_item * qty,
+      };
+    });
+
+  if (loanInserts.length > 0) {
+    const { error: loanError } = await supabase.from("equipment_loans").insert(loanInserts);
+    if (loanError) {
+      console.error("rental insert failed during reservation, rolling back", loanError);
+      await supabase.from("reservations").delete().eq("id", reservation.id);
+      return NextResponse.json({ error: "rental_insert_failed" }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({ reservation }, { status: 201 });
 }

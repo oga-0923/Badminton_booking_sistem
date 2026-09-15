@@ -33,3 +33,15 @@ export function isWithinBookingWindow(
   const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
   return diffDays >= 0 && diffDays <= settings.booking_window_days;
 }
+
+/**
+ * 当日の、すでに開始時刻を過ぎた時間枠は予約できないようにする。
+ * (未来の日付は常に予約可、過去の日付は isWithinBookingWindow 側で弾かれる)
+ */
+export function isSlotBookable(reservationDate: string, startTime: string, now: Date = new Date()): boolean {
+  const today = formatLocalDate(now);
+  if (reservationDate !== today) return true;
+
+  const nowHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return startTime.slice(0, 5) > nowHHMM;
+}

@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import QRCode from "qrcode";
 import { useI18n } from "@/lib/i18n/context";
 import { createClient } from "@/lib/supabase/client";
 import { buildTimeSlots } from "@/lib/reservation/slots";
 import { courtDisplayName } from "@/lib/reservation/court-label";
-import { canCancel } from "@/lib/reservation/rules";
+import { canCancel, isSlotBookable } from "@/lib/reservation/rules";
 import { formatLocalDate } from "@/lib/date";
-import { X } from "lucide-react";
-import type { Court, VenueSettings } from "@/types/database";
+import { X, QrCode } from "lucide-react";
+import type { Court, Equipment, VenueSettings } from "@/types/database";
 
 interface ReserveCalendarProps {
   userId: string;
@@ -32,7 +33,8 @@ interface OwnReservation {
 
 type PendingAction =
   | { type: "book"; courtId: string; courtName: string; start: string; end: string }
-  | { type: "cancel"; reservationId: string; courtName: string; start: string; end: string };
+  | { type: "manage"; reservationId: string; courtName: string; start: string; end: string; cancellable: boolean }
+  | { type: "qr"; reservationId: string };
 
 export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarProps) {
   const { t, locale } = useI18n();
@@ -40,9 +42,13 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
   const [availability, setAvailability] = useState<AvailabilityRow[]>([]);
   const [ownReservations, setOwnReservations] = useState<OwnReservation[]>([]);
   const [closedCourtIds, setClosedCourtIds] = useState<Set<string>>(new Set());
+  const [equipmentAvailability, setEquipmentAvailability] = useState<(Equipment & { available: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [racketQty, setRacketQty] = useState(0);
+  const [shuttleQty, setShuttleQty] = useState(0);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const slots = useMemo(() => buildTimeSlots(settings), [settings]);
@@ -51,20 +57,32 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
     setLoading(true);
     const supabase = createClient();
 
-    const [{ data: avail }, { data: own }, { data: closures }] = await Promise.all([
-      supabase.rpc("get_availability", { p_date: date }),
-      supabase
-        .from("reservations")
-        .select("id, court_id, start_time")
-        .eq("user_id", userId)
-        .eq("reservation_date", date)
-        .in("status", ["confirmed", "pending_payment"]),
-      supabase.from("court_closures").select("court_id").eq("closed_date", date),
-    ]);
+    const [{ data: avail }, { data: own }, { data: closures }, { data: equipment }, { data: activeLoans }] =
+      await Promise.all([
+        supabase.rpc("get_availability", { p_date: date }),
+        supabase
+          .from("reservations")
+          .select("id, court_id, start_time")
+          .eq("user_id", userId)
+          .eq("reservation_date", date)
+          .in("status", ["confirmed", "pending_payment"]),
+        supabase.from("court_closures").select("court_id").eq("closed_date", date),
+        supabase.from("equipment").select("*").order("type"),
+        supabase.from("equipment_loans").select("equipment_id, quantity").eq("status", "borrowed"),
+      ]);
 
     setAvailability((avail as AvailabilityRow[]) ?? []);
     setOwnReservations((own as OwnReservation[]) ?? []);
     setClosedCourtIds(new Set((closures ?? []).map((c) => c.court_id)));
+
+    const borrowedByEquipment = new Map<string, number>();
+    for (const loan of activeLoans ?? []) {
+      borrowedByEquipment.set(loan.equipment_id, (borrowedByEquipment.get(loan.equipment_id) ?? 0) + loan.quantity);
+    }
+    setEquipmentAvailability(
+      (equipment ?? []).map((e) => ({ ...e, available: e.total_quantity - (borrowedByEquipment.get(e.id) ?? 0) }))
+    );
+
     setLoading(false);
   }, [date, userId]);
 
@@ -73,6 +91,17 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (pending?.type !== "qr") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQrDataUrl(null);
+      return;
+    }
+    QRCode.toDataURL(pending.reservationId, { width: 240, margin: 1 }).then((url) => {
+      setQrDataUrl(url);
+    });
+  }, [pending]);
 
   const shiftDate = (deltaDays: number) => {
     const d = new Date(date + "T00:00:00");
@@ -87,43 +116,68 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
   const findOwn = (courtId: string, start: string) =>
     ownReservations.find((r) => r.court_id === courtId && r.start_time.slice(0, 5) === start);
 
+  const racket = equipmentAvailability.find((e) => e.type === "racket");
+  const shuttle = equipmentAvailability.find((e) => e.type === "shuttle");
+
   const openBookConfirm = (court: Court, start: string, end: string) => {
     setMessage(null);
+    setRacketQty(0);
+    setShuttleQty(0);
     setPending({ type: "book", courtId: court.id, courtName: courtDisplayName(court, t), start, end });
   };
 
-  const openCancelConfirm = (court: Court, reservationId: string, start: string, end: string) => {
+  const openManage = (court: Court, reservationId: string, start: string, end: string) => {
     setMessage(null);
-    setPending({ type: "cancel", reservationId, courtName: courtDisplayName(court, t), start, end });
+    setPending({
+      type: "manage",
+      reservationId,
+      courtName: courtDisplayName(court, t),
+      start,
+      end,
+      cancellable: canCancel(date, settings),
+    });
   };
 
-  const confirmPending = async () => {
-    if (!pending) return;
+  const submitBooking = async () => {
+    if (pending?.type !== "book") return;
     setSubmitting(true);
-
     try {
-      if (pending.type === "book") {
-        const res = await fetch("/api/reservations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ court_id: pending.courtId, reservation_date: date, start_time: pending.start }),
-        });
-        if (res.status === 409) {
-          setMessage({ type: "error", text: t("reserve.slotTaken") });
-        } else if (!res.ok) {
-          setMessage({ type: "error", text: t("common.error") });
-        } else {
-          setMessage({ type: "success", text: t("reserve.bookSuccess") });
-        }
+      const res = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          court_id: pending.courtId,
+          reservation_date: date,
+          start_time: pending.start,
+          racket_quantity: racketQty,
+          shuttle_quantity: shuttleQty,
+        }),
+      });
+      if (res.status === 409) {
+        setMessage({ type: "error", text: t("reserve.slotTaken") });
+      } else if (!res.ok) {
+        setMessage({ type: "error", text: t("common.error") });
       } else {
-        const res = await fetch(`/api/reservations/${pending.reservationId}`, { method: "PATCH" });
-        if (res.status === 403) {
-          setMessage({ type: "error", text: t("reserve.cancelDeadlinePassed") });
-        } else if (!res.ok) {
-          setMessage({ type: "error", text: t("common.error") });
-        } else {
-          setMessage({ type: "success", text: t("reserve.cancelSuccess") });
-        }
+        setMessage({ type: "success", text: t("reserve.bookSuccess") });
+      }
+      await load();
+    } finally {
+      setSubmitting(false);
+      setPending(null);
+    }
+  };
+
+  const discardReservation = async () => {
+    if (pending?.type !== "manage") return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/reservations/${pending.reservationId}`, { method: "PATCH" });
+      if (res.status === 403) {
+        setMessage({ type: "error", text: t("reserve.cancelDeadlinePassed") });
+      } else if (!res.ok) {
+        setMessage({ type: "error", text: t("common.error") });
+      } else {
+        setMessage({ type: "success", text: t("reserve.cancelSuccess") });
       }
       await load();
     } finally {
@@ -207,95 +261,131 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
               </tr>
             </thead>
             <tbody>
-              {slots.map((slot) => (
-                <tr key={slot.start} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
-                  <td className="px-3 py-2 font-medium text-slate-500">
-                    {slot.start}–{slot.end}
-                  </td>
-                  {courts.map((court) => {
-                    const own = findOwn(court.id, slot.start);
-                    const occupied = findOccupancy(court.id, slot.start);
-                    const closed = closedCourtIds.has(court.id);
+              {slots.map((slot) => {
+                const bookable = isSlotBookable(date, slot.start);
+                return (
+                  <tr key={slot.start} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                    <td className="px-3 py-2 font-medium text-slate-500">
+                      {slot.start}–{slot.end}
+                    </td>
+                    {courts.map((court) => {
+                      const own = findOwn(court.id, slot.start);
+                      const occupied = findOccupancy(court.id, slot.start);
+                      const closed = closedCourtIds.has(court.id);
 
-                    if (closed) {
-                      return (
-                        <td key={court.id} className="px-3 py-2">
-                          <span className="block w-full rounded-md bg-slate-50 px-2 py-1.5 text-center text-slate-300 dark:bg-slate-900 dark:text-slate-600">
-                            {t("reserve.closed")}
-                          </span>
-                        </td>
-                      );
-                    }
-
-                    if (own) {
-                      const cancellable = canCancel(date, settings);
-                      if (!cancellable) {
+                      if (closed) {
                         return (
                           <td key={court.id} className="px-3 py-2">
-                            <span className="block w-full rounded-md bg-emerald-50 px-2 py-1.5 text-center text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-                              {t("reserve.yourBooking")}
+                            <span className="block w-full rounded-md bg-slate-50 px-2 py-1.5 text-center text-slate-300 dark:bg-slate-900 dark:text-slate-600">
+                              {t("reserve.closed")}
                             </span>
                           </td>
                         );
                       }
+
+                      if (own) {
+                        return (
+                          <td key={court.id} className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => openManage(court, own.id, slot.start, slot.end)}
+                              className="flex w-full items-center justify-center gap-1 rounded-md bg-emerald-100 px-2 py-1.5 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-200"
+                            >
+                              {t("reserve.yourBooking")}
+                            </button>
+                          </td>
+                        );
+                      }
+
+                      if (occupied) {
+                        return (
+                          <td key={court.id} className="px-3 py-2">
+                            <span className="block w-full rounded-md bg-slate-100 px-2 py-1.5 text-center text-slate-400 dark:bg-slate-800">
+                              {t("reserve.booked")}
+                            </span>
+                          </td>
+                        );
+                      }
+
+                      if (!bookable) {
+                        return (
+                          <td key={court.id} className="px-3 py-2">
+                            <span className="block w-full rounded-md bg-slate-50 px-2 py-1.5 text-center text-slate-300 dark:bg-slate-900 dark:text-slate-600">
+                              —
+                            </span>
+                          </td>
+                        );
+                      }
+
                       return (
                         <td key={court.id} className="px-3 py-2">
                           <button
                             type="button"
-                            onClick={() => openCancelConfirm(court, own.id, slot.start, slot.end)}
-                            title={t("reserve.tapToCancel")}
-                            className="flex w-full items-center justify-center gap-1 rounded-md bg-emerald-100 px-2 py-1.5 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-200"
+                            onClick={() => openBookConfirm(court, slot.start, slot.end)}
+                            className="w-full rounded-md border border-emerald-300 px-2 py-1.5 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950"
                           >
-                            {t("reserve.yourBooking")}
-                            <X className="h-3.5 w-3.5" aria-hidden />
+                            {t("reserve.available")}
                           </button>
                         </td>
                       );
-                    }
-
-                    if (occupied) {
-                      return (
-                        <td key={court.id} className="px-3 py-2">
-                          <span className="block w-full rounded-md bg-slate-100 px-2 py-1.5 text-center text-slate-400 dark:bg-slate-800">
-                            {t("reserve.booked")}
-                          </span>
-                        </td>
-                      );
-                    }
-
-                    return (
-                      <td key={court.id} className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => openBookConfirm(court, slot.start, slot.end)}
-                          className="w-full rounded-md border border-emerald-300 px-2 py-1.5 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950"
-                        >
-                          {t("reserve.available")}
-                        </button>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {pending && (
+      {pending?.type === "book" && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900">
-            <h2 className="mb-2 text-lg font-bold">
-              {pending.type === "book" ? t("reserve.confirmBookTitle") : t("reserve.confirmCancelTitle")}
-            </h2>
+            <h2 className="mb-2 text-lg font-bold">{t("reserve.confirmBookTitle")}</h2>
             <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
-              {t(pending.type === "book" ? "reserve.confirmBookBody" : "reserve.confirmCancelBody", {
+              {t("reserve.confirmBookBody", {
                 court: pending.courtName,
                 date: dateLabel,
                 start: pending.start,
                 end: pending.end,
               })}
             </p>
+
+            <div className="mb-4 flex flex-col gap-2 rounded-md border border-slate-200 p-3 dark:border-slate-700">
+              <p className="text-xs font-medium text-slate-500">{t("reserve.rentalWithBooking")}</p>
+              {racket && (
+                <div className="flex items-center justify-between text-sm">
+                  <span>
+                    {t("rental.racket")} ({t("rental.available", { n: racket.available })})
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={racket.available}
+                    value={racketQty}
+                    onChange={(e) => setRacketQty(Math.max(0, Math.min(racket.available, Number(e.target.value) || 0)))}
+                    className="w-16 rounded-md border border-slate-300 px-2 py-1 text-center dark:border-slate-700 dark:bg-slate-900"
+                  />
+                </div>
+              )}
+              {shuttle && (
+                <div className="flex items-center justify-between text-sm">
+                  <span>
+                    {t("rental.shuttle")} ({t("rental.available", { n: shuttle.available })})
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={shuttle.available}
+                    value={shuttleQty}
+                    onChange={(e) =>
+                      setShuttleQty(Math.max(0, Math.min(shuttle.available, Number(e.target.value) || 0)))
+                    }
+                    className="w-16 rounded-md border border-slate-300 px-2 py-1 text-center dark:border-slate-700 dark:bg-slate-900"
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -307,13 +397,77 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
               </button>
               <button
                 type="button"
-                onClick={confirmPending}
+                onClick={submitBooking}
                 disabled={submitting}
                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
               >
                 {t("common.confirm")}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {pending?.type === "manage" && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900">
+            <h2 className="mb-2 text-lg font-bold">{pending.courtName}</h2>
+            <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+              {dateLabel} {pending.start}–{pending.end}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setPending(null)}
+                disabled={submitting}
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+              >
+                {t("common.close")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPending({ type: "qr", reservationId: pending.reservationId })}
+                className="flex items-center justify-center gap-2 rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600"
+              >
+                <QrCode className="h-4 w-4" aria-hidden />
+                {t("reserve.showQr")}
+              </button>
+              {pending.cancellable && (
+                <button
+                  type="button"
+                  onClick={discardReservation}
+                  disabled={submitting}
+                  className="flex items-center justify-center gap-1 rounded-md border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                  {t("reserve.discardBooking")}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pending?.type === "qr" && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
+          <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900">
+            <h2 className="text-lg font-bold">{t("reserve.showQr")}</h2>
+            {qrDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={qrDataUrl} alt="QR" className="h-60 w-60" />
+            ) : (
+              <div className="flex h-60 w-60 items-center justify-center text-sm text-slate-400">
+                {t("common.loading")}
+              </div>
+            )}
+            <p className="text-center text-xs text-slate-500">{t("reserve.qrHint")}</p>
+            <button
+              type="button"
+              onClick={() => setPending(null)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+            >
+              {t("common.close")}
+            </button>
           </div>
         </div>
       )}
