@@ -153,6 +153,7 @@ const zh: Dictionary = {
     checkinAlready: "已经完成入场登记",
     allowEntry: "允许入场",
     denyEntry: "拒绝入场",
+    cancelReservation: "取消预约",
   },
   common: {
     back: "返回",

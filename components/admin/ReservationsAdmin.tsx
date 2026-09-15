@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import { courtDisplayName } from "@/lib/reservation/court-label";
 import type { Court, ReservationStatus } from "@/types/database";
@@ -32,10 +33,13 @@ const STATUSES: ReservationStatus[] = ["pending_payment", "confirmed", "cancelle
 
 export function ReservationsAdmin({ courts, reservations }: ReservationsAdminProps) {
   const { t } = useI18n();
+  const router = useRouter();
   const [courtId, setCourtId] = useState("");
   const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [pendingCancel, setPendingCancel] = useState<ReservationRow | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const filtered = useMemo(() => {
     return reservations.filter((r) => {
@@ -59,6 +63,22 @@ export function ReservationsAdmin({ courts, reservations }: ReservationsAdminPro
   const courtName = (id: string) => {
     const court = courts.find((c) => c.id === id);
     return court ? courtDisplayName(court, t) : id;
+  };
+
+  const confirmCancel = async () => {
+    if (!pendingCancel) return;
+    setBusy(true);
+    try {
+      await fetch(`/api/admin/reservations/${pendingCancel.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cancel: true }),
+      });
+      router.refresh();
+    } finally {
+      setBusy(false);
+      setPendingCancel(null);
+    }
   };
 
   return (
@@ -109,7 +129,7 @@ export function ReservationsAdmin({ courts, reservations }: ReservationsAdminPro
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-        <table className="w-full min-w-[600px] border-collapse text-sm">
+        <table className="w-full min-w-[680px] border-collapse text-sm">
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-900">
               <th className="border-b border-slate-200 px-3 py-2 text-left dark:border-slate-800">日付</th>
@@ -118,6 +138,7 @@ export function ReservationsAdmin({ courts, reservations }: ReservationsAdminPro
               <th className="border-b border-slate-200 px-3 py-2 text-left dark:border-slate-800">氏名/学籍番号</th>
               <th className="border-b border-slate-200 px-3 py-2 text-left dark:border-slate-800">状態</th>
               <th className="border-b border-slate-200 px-3 py-2 text-left dark:border-slate-800">金額</th>
+              <th className="border-b border-slate-200 px-3 py-2 text-left dark:border-slate-800"></th>
             </tr>
           </thead>
           <tbody>
@@ -135,12 +156,53 @@ export function ReservationsAdmin({ courts, reservations }: ReservationsAdminPro
                   </td>
                   <td className="px-3 py-2">{r.status}</td>
                   <td className="px-3 py-2">{r.amount}</td>
+                  <td className="px-3 py-2">
+                    {r.status === "confirmed" && (
+                      <button
+                        type="button"
+                        onClick={() => setPendingCancel(r)}
+                        className="text-red-600 hover:underline"
+                      >
+                        {t("admin.cancelReservation")}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {pendingCancel && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900">
+            <h2 className="mb-2 text-lg font-bold">{t("admin.cancelReservation")}</h2>
+            <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+              {courtName(pendingCancel.court_id)} {pendingCancel.reservation_date}{" "}
+              {pendingCancel.start_time.slice(0, 5)}-{pendingCancel.end_time.slice(0, 5)}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingCancel(null)}
+                disabled={busy}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+              >
+                {t("common.close")}
+              </button>
+              <button
+                type="button"
+                onClick={confirmCancel}
+                disabled={busy}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {t("admin.cancelReservation")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

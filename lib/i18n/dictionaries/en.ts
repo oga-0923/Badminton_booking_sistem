@@ -153,6 +153,7 @@ const en: Dictionary = {
     checkinAlready: "Already checked in",
     allowEntry: "Allow Entry",
     denyEntry: "Deny Entry",
+    cancelReservation: "Cancel Reservation",
   },
   common: {
     back: "Back",

@@ -151,6 +151,7 @@ const ja = {
     checkinAlready: "すでにチェックイン済みです",
     allowEntry: "入場を許可",
     denyEntry: "入場を拒否",
+    cancelReservation: "予約をキャンセル",
   },
   common: {
     back: "戻る",
