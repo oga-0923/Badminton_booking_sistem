@@ -81,7 +81,8 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
   const [availability, setAvailability] = useState<AvailabilityRow[]>([]);
   const [ownReservations, setOwnReservations] = useState<OwnReservation[]>([]);
   const [closedCourtIds, setClosedCourtIds] = useState<Set<string>>(new Set());
-  const [equipmentAvailability, setEquipmentAvailability] = useState<(Equipment & { available: number })[]>([]);
+  const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
+  const [bookingEquipment, setBookingEquipment] = useState<(Equipment & { available: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pending, setPending] = useState<PendingAction | null>(null);
@@ -97,31 +98,22 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
     setLoading(true);
     const supabase = createClient();
 
-    const [{ data: avail }, { data: own }, { data: closures }, { data: equipment }, { data: equipmentAvail }] =
-      await Promise.all([
-        supabase.rpc("get_availability", { p_date: date }),
-        supabase
-          .from("reservations")
-          .select("id, court_id, start_time")
-          .eq("user_id", userId)
-          .eq("reservation_date", date)
-          .in("status", ["confirmed", "pending_payment"]),
-        supabase.from("court_closures").select("court_id").eq("closed_date", date),
-        supabase.from("equipment").select("*").order("type"),
-        supabase.rpc("get_equipment_availability", { p_date: date }),
-      ]);
+    const [{ data: avail }, { data: own }, { data: closures }, { data: equipment }] = await Promise.all([
+      supabase.rpc("get_availability", { p_date: date }),
+      supabase
+        .from("reservations")
+        .select("id, court_id, start_time")
+        .eq("user_id", userId)
+        .eq("reservation_date", date)
+        .in("status", ["confirmed", "pending_payment"]),
+      supabase.from("court_closures").select("court_id").eq("closed_date", date),
+      supabase.from("equipment").select("*").order("type"),
+    ]);
 
     setAvailability((avail as AvailabilityRow[]) ?? []);
     setOwnReservations((own as OwnReservation[]) ?? []);
     setClosedCourtIds(new Set((closures ?? []).map((c) => c.court_id)));
-
-    const availableByEquipment = new Map<string, number>();
-    for (const row of equipmentAvail ?? []) {
-      availableByEquipment.set(row.equipment_id, row.available);
-    }
-    setEquipmentAvailability(
-      (equipment ?? []).map((e) => ({ ...e, available: availableByEquipment.get(e.id) ?? e.total_quantity }))
-    );
+    setEquipmentList(equipment ?? []);
 
     setLoading(false);
   }, [date, userId]);
@@ -207,14 +199,28 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
   const findOwn = (courtId: string, start: string) =>
     ownReservations.find((r) => r.court_id === courtId && r.start_time.slice(0, 5) === start);
 
-  const racket = equipmentAvailability.find((e) => e.type === "racket");
-  const shuttle = equipmentAvailability.find((e) => e.type === "shuttle");
+  const racket = bookingEquipment.find((e) => e.type === "racket");
+  const shuttle = bookingEquipment.find((e) => e.type === "shuttle");
 
-  const openBookConfirm = (court: Court, start: string, end: string) => {
+  const openBookConfirm = async (court: Court, start: string, end: string) => {
     setMessage(null);
     setRacketQty(0);
     setShuttleQty(0);
+    setBookingEquipment(equipmentList.map((e) => ({ ...e, available: e.total_quantity })));
     setPending({ type: "book", courtId: court.id, courtName: courtDisplayName(court, t), start, end });
+
+    const supabase = createClient();
+    const { data: equipmentAvail } = await supabase.rpc("get_equipment_availability", {
+      p_date: date,
+      p_start_time: start,
+    });
+    const availableByEquipment = new Map<string, number>();
+    for (const row of equipmentAvail ?? []) {
+      availableByEquipment.set(row.equipment_id, row.available);
+    }
+    setBookingEquipment(
+      equipmentList.map((e) => ({ ...e, available: availableByEquipment.get(e.id) ?? e.total_quantity }))
+    );
   };
 
   const openManage = (court: Court, reservationId: string, start: string, end: string) => {

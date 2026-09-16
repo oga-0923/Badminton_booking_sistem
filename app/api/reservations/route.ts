@@ -74,7 +74,7 @@ export async function POST(request: Request) {
         ? supabase.from("equipment").select("id, type, total_quantity")
         : Promise.resolve({ data: null }),
       racketQty > 0 || shuttleQty > 0
-        ? supabase.rpc("get_equipment_availability", { p_date: reservationDate })
+        ? supabase.rpc("get_equipment_availability", { p_date: reservationDate, p_start_time: startTime })
         : Promise.resolve({ data: null }),
     ]);
 

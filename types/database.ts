@@ -232,7 +232,7 @@ export interface Database {
         Returns: boolean;
       };
       get_equipment_availability: {
-        Args: { p_date: string };
+        Args: { p_date: string; p_start_time?: string | null };
         Returns: { equipment_id: string; total_quantity: number; available: number }[];
       };
       get_checkin_info: {

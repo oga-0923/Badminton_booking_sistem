@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { formatLocalDate } from "@/lib/date";
+import { buildTimeSlots } from "@/lib/reservation/slots";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -37,20 +38,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  const { data: settings } = await supabase.from("venue_settings").select("*").eq("id", 1).single();
+
+  const today = formatLocalDate(new Date());
+  const nowHHMM = new Date().toTimeString().slice(0, 5);
+  const currentSlot = settings ? buildTimeSlots(settings).find((s) => s.start <= nowHHMM && nowHHMM < s.end) : undefined;
+
   const { data: equipmentAvail } = await supabase.rpc("get_equipment_availability", {
-    p_date: formatLocalDate(new Date()),
+    p_date: today,
+    p_start_time: currentSlot?.start ?? null,
   });
   const available = equipmentAvail?.find((r) => r.equipment_id === equipmentId)?.available ?? equipment.total_quantity;
 
   if (quantity > available) {
     return NextResponse.json({ error: "insufficient_stock" }, { status: 409 });
   }
-
-  const { data: settings } = await supabase
-    .from("venue_settings")
-    .select("rental_fee_per_item")
-    .eq("id", 1)
-    .single();
 
   const feePerItem = settings?.rental_fee_per_item ?? 10;
   const feeAmount = isFree ? 0 : feePerItem * quantity;
