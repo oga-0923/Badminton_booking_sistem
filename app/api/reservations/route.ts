@@ -66,14 +66,17 @@ export async function POST(request: Request) {
 
   const endTime = addMinutesToTime(startTime, settings.slot_duration_minutes);
 
-  const [{ data: profile }, { data: verified }, { data: equipmentList }, { data: activeLoans }] = await Promise.all([
-    supabase.from("profiles").select("is_fee_exempt").eq("id", user.id).single(),
-    supabase.rpc("is_verified_student", { p_user_id: user.id }),
-    racketQty > 0 || shuttleQty > 0 ? supabase.from("equipment").select("id, type, total_quantity") : Promise.resolve({ data: null }),
-    racketQty > 0 || shuttleQty > 0
-      ? supabase.from("equipment_loans").select("equipment_id, quantity").eq("status", "borrowed")
-      : Promise.resolve({ data: null }),
-  ]);
+  const [{ data: profile }, { data: verified }, { data: equipmentList }, { data: equipmentAvail }] =
+    await Promise.all([
+      supabase.from("profiles").select("is_fee_exempt").eq("id", user.id).single(),
+      supabase.rpc("is_verified_student", { p_user_id: user.id }),
+      racketQty > 0 || shuttleQty > 0
+        ? supabase.from("equipment").select("id, type, total_quantity")
+        : Promise.resolve({ data: null }),
+      racketQty > 0 || shuttleQty > 0
+        ? supabase.rpc("get_equipment_availability", { p_date: reservationDate })
+        : Promise.resolve({ data: null }),
+    ]);
 
   const isFeeExempt = Boolean(profile?.is_fee_exempt) || Boolean(verified);
   const amount = isFeeExempt ? 0 : settings.price_per_slot;
@@ -83,9 +86,9 @@ export async function POST(request: Request) {
   for (const e of equipmentList ?? []) {
     equipmentByType.set(e.type, { id: e.id, total_quantity: e.total_quantity });
   }
-  const borrowedByEquipment = new Map<string, number>();
-  for (const l of activeLoans ?? []) {
-    borrowedByEquipment.set(l.equipment_id, (borrowedByEquipment.get(l.equipment_id) ?? 0) + l.quantity);
+  const availableByEquipment = new Map<string, number>();
+  for (const row of equipmentAvail ?? []) {
+    availableByEquipment.set(row.equipment_id, row.available);
   }
 
   for (const [type, qty] of Object.entries(wantedByType) as [EquipmentType, number][]) {
@@ -94,7 +97,7 @@ export async function POST(request: Request) {
     if (!equipment) {
       return NextResponse.json({ error: "equipment_not_found" }, { status: 400 });
     }
-    const available = equipment.total_quantity - (borrowedByEquipment.get(equipment.id) ?? 0);
+    const available = availableByEquipment.get(equipment.id) ?? equipment.total_quantity;
     if (qty > available) {
       return NextResponse.json({ error: "insufficient_stock", equipment_type: type }, { status: 409 });
     }

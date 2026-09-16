@@ -231,6 +231,10 @@ export interface Database {
         Args: { p_student_id: string };
         Returns: boolean;
       };
+      get_equipment_availability: {
+        Args: { p_date: string };
+        Returns: { equipment_id: string; total_quantity: number; available: number }[];
+      };
       get_checkin_info: {
         Args: { p_reservation_id: string };
         Returns: {

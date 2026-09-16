@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { formatLocalDate } from "@/lib/date";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -36,14 +37,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { data: activeLoans } = await supabase
-    .from("equipment_loans")
-    .select("quantity")
-    .eq("equipment_id", equipmentId)
-    .eq("status", "borrowed");
-
-  const borrowed = (activeLoans ?? []).reduce((sum, l) => sum + l.quantity, 0);
-  const available = equipment.total_quantity - borrowed;
+  const { data: equipmentAvail } = await supabase.rpc("get_equipment_availability", {
+    p_date: formatLocalDate(new Date()),
+  });
+  const available = equipmentAvail?.find((r) => r.equipment_id === equipmentId)?.available ?? equipment.total_quantity;
 
   if (quantity > available) {
     return NextResponse.json({ error: "insufficient_stock" }, { status: 409 });

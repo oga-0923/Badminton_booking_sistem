@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { formatLocalDate } from "@/lib/date";
 import { RentalForm } from "@/components/RentalForm";
 
 export default async function RentalPage() {
@@ -18,10 +19,12 @@ export default async function RentalPage() {
 
   if (!profile) redirect("/profile");
 
-  const [{ data: equipment }, { data: allLoans }, { data: myLoans }, { data: settings }, { data: verified }] =
+  const today = formatLocalDate(new Date());
+
+  const [{ data: equipment }, { data: equipmentAvail }, { data: myLoans }, { data: settings }, { data: verified }] =
     await Promise.all([
       supabase.from("equipment").select("*").order("type"),
-      supabase.from("equipment_loans").select("equipment_id, quantity").eq("status", "borrowed"),
+      supabase.rpc("get_equipment_availability", { p_date: today }),
       supabase
         .from("equipment_loans")
         .select("id, equipment_id, quantity, status, fee_amount, borrowed_at")
@@ -33,14 +36,14 @@ export default async function RentalPage() {
 
   const isFree = Boolean(verified) || Boolean(profile.is_fee_exempt);
 
-  const borrowedByEquipment = new Map<string, number>();
-  for (const loan of allLoans ?? []) {
-    borrowedByEquipment.set(loan.equipment_id, (borrowedByEquipment.get(loan.equipment_id) ?? 0) + loan.quantity);
+  const availableByEquipment = new Map<string, number>();
+  for (const row of equipmentAvail ?? []) {
+    availableByEquipment.set(row.equipment_id, row.available);
   }
 
   const equipmentWithAvailability = (equipment ?? []).map((e) => ({
     ...e,
-    available: e.total_quantity - (borrowedByEquipment.get(e.id) ?? 0),
+    available: availableByEquipment.get(e.id) ?? e.total_quantity,
   }));
 
   return (
