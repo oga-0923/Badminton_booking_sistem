@@ -13,6 +13,8 @@ const zh: Dictionary = {
     login: "登录",
     signup: "注册",
     logout: "退出登录",
+    bottomReserver: "预约",
+    bottomAdmin: "管理",
   },
   auth: {
     loginTitle: "登录",

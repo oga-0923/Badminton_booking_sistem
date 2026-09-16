@@ -13,6 +13,8 @@ const en: Dictionary = {
     login: "Log in",
     signup: "Sign up",
     logout: "Log out",
+    bottomReserver: "Reserve",
+    bottomAdmin: "Admin",
   },
   auth: {
     loginTitle: "Log in",

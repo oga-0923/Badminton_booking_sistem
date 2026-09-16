@@ -32,7 +32,10 @@ export function Header() {
         <nav className="flex items-center gap-3 text-sm">
           {user ? (
             <>
-              <Link href="/reserve" className="text-slate-600 hover:text-emerald-700 dark:text-slate-300">
+              <Link
+                href="/reserve"
+                className="hidden text-slate-600 hover:text-emerald-700 dark:text-slate-300 md:inline"
+              >
                 {t("nav.reserve")}
               </Link>
               <Link href="/rental" className="text-slate-600 hover:text-emerald-700 dark:text-slate-300">
@@ -42,7 +45,10 @@ export function Header() {
                 {t("nav.profile")}
               </Link>
               {(role === "staff" || role === "admin") && (
-                <Link href="/admin" className="text-slate-600 hover:text-emerald-700 dark:text-slate-300">
+                <Link
+                  href="/admin"
+                  className="hidden text-slate-600 hover:text-emerald-700 dark:text-slate-300 md:inline"
+                >
                   {t("nav.admin")}
                 </Link>
               )}

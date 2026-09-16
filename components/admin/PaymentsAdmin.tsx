@@ -129,32 +129,43 @@ export function PaymentsAdmin({ reservations, loans }: { reservations: Reservati
       {groups.length === 0 ? (
         <p className="text-sm text-slate-500">{t("admin.noPaymentItems")}</p>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {groups.map((g, idx) => (
             <div key={idx} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-              <p className="mb-2 font-medium">
-                {g.name} {g.studentId ? `(${g.studentId})` : ""}
+              <p className="mb-2 text-base font-semibold">
+                {g.name}
+                {g.studentId && <span className="ml-1 text-sm font-normal text-slate-500">({g.studentId})</span>}
               </p>
-              <ul className="flex flex-col gap-1">
+              <ul className="flex flex-col gap-2">
                 {g.reservations.map((r) => {
                   const court = firstOf(r.courts);
-                  const label = `${court ? courtDisplayName(court as Court, t) : r.court_id} ${r.reservation_date} ${r.start_time.slice(0, 5)}-${r.end_time.slice(0, 5)}`;
+                  const courtLabel = court ? courtDisplayName(court as Court, t) : r.court_id;
                   const unpaid = r.amount > 0 && !r.paid;
                   return (
                     <li key={r.id}>
                       <button
                         type="button"
                         disabled={!unpaid}
-                        onClick={() => setPending({ kind: "reservation", id: r.id, label, amount: r.amount })}
-                        className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm ${
+                        onClick={() =>
+                          setPending({
+                            kind: "reservation",
+                            id: r.id,
+                            label: `${courtLabel} ${r.reservation_date} ${r.start_time.slice(0, 5)}-${r.end_time.slice(0, 5)}`,
+                            amount: r.amount,
+                          })
+                        }
+                        className={`flex w-full flex-col gap-1 rounded-md px-3 py-2.5 text-left ${
                           unpaid
-                            ? "bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-950 dark:text-red-300"
+                            ? "bg-red-100 text-red-900 hover:bg-red-200 dark:bg-red-950 dark:text-red-200"
                             : "bg-slate-50 text-slate-500 dark:bg-slate-900"
                         }`}
                       >
-                        <span>{label}</span>
-                        <span>
-                          {r.amount} {r.paid ? `(${t("admin.paid")})` : unpaid ? `(${t("admin.unpaid")})` : ""}
+                        <span className="text-sm font-medium">{courtLabel}</span>
+                        <span className="text-xs opacity-80">
+                          {r.reservation_date} {r.start_time.slice(0, 5)}-{r.end_time.slice(0, 5)}
+                        </span>
+                        <span className="text-sm font-semibold">
+                          {r.amount} {r.paid ? `· ${t("admin.paid")}` : unpaid ? `· ${t("admin.unpaid")}` : ""}
                         </span>
                       </button>
                     </li>
@@ -162,23 +173,31 @@ export function PaymentsAdmin({ reservations, loans }: { reservations: Reservati
                 })}
                 {g.loans.map((l) => {
                   const eq = firstOf(l.equipment);
-                  const label = `${eq ? t(typeKey[eq.type]) : l.equipment_id} × ${l.quantity}`;
                   const unpaid = l.fee_amount > 0 && !l.fee_collected;
                   return (
                     <li key={l.id}>
                       <button
                         type="button"
                         disabled={!unpaid}
-                        onClick={() => setPending({ kind: "loan", id: l.id, label, amount: l.fee_amount })}
-                        className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm ${
+                        onClick={() =>
+                          setPending({
+                            kind: "loan",
+                            id: l.id,
+                            label: `${eq ? t(typeKey[eq.type]) : l.equipment_id} × ${l.quantity}`,
+                            amount: l.fee_amount,
+                          })
+                        }
+                        className={`flex w-full flex-col gap-1 rounded-md px-3 py-2.5 text-left ${
                           unpaid
-                            ? "bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-950 dark:text-red-300"
+                            ? "bg-red-100 text-red-900 hover:bg-red-200 dark:bg-red-950 dark:text-red-200"
                             : "bg-slate-50 text-slate-500 dark:bg-slate-900"
                         }`}
                       >
-                        <span>{label}</span>
-                        <span>
-                          {l.fee_amount} {l.fee_collected ? `(${t("admin.paid")})` : unpaid ? `(${t("admin.unpaid")})` : ""}
+                        <span className="text-sm font-medium">
+                          {eq ? t(typeKey[eq.type]) : l.equipment_id} × {l.quantity}
+                        </span>
+                        <span className="text-sm font-semibold">
+                          {l.fee_amount} {l.fee_collected ? `· ${t("admin.paid")}` : unpaid ? `· ${t("admin.unpaid")}` : ""}
                         </span>
                       </button>
                     </li>

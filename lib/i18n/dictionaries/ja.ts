@@ -11,6 +11,8 @@ const ja = {
     login: "ログイン",
     signup: "新規登録",
     logout: "ログアウト",
+    bottomReserver: "予約者",
+    bottomAdmin: "管理者",
   },
   auth: {
     loginTitle: "ログイン",
