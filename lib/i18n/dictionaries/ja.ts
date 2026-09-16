@@ -70,7 +70,7 @@ const ja = {
     closed: "休止中",
     rentalWithBooking: "ラケット・シャトルも一緒にレンタルする(任意)",
     showQr: "QRコード",
-    discardBooking: "予約を破棄",
+    discardBooking: "予約をキャンセル",
     qrHint: "受付でこのQRコードを提示してください。",
     reservationInfo: "予約情報",
     noEquipment: "レンタル可能な備品がまだ登録されていません。",

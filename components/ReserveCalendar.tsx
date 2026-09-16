@@ -6,7 +6,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { createClient } from "@/lib/supabase/client";
 import { buildTimeSlots } from "@/lib/reservation/slots";
 import { courtDisplayName } from "@/lib/reservation/court-label";
-import { canCancel, isSlotBookable } from "@/lib/reservation/rules";
+import { isSlotBookable } from "@/lib/reservation/rules";
 import { formatLocalDate } from "@/lib/date";
 import { X, QrCode } from "lucide-react";
 import type { Court, Equipment, VenueSettings } from "@/types/database";
@@ -33,7 +33,7 @@ interface OwnReservation {
 
 type PendingAction =
   | { type: "book"; courtId: string; courtName: string; start: string; end: string }
-  | { type: "manage"; reservationId: string; courtName: string; start: string; end: string; cancellable: boolean }
+  | { type: "manage"; reservationId: string; courtName: string; start: string; end: string }
   | { type: "qr"; reservationId: string; courtName: string; start: string; end: string };
 
 interface QrRentalItem {
@@ -150,14 +150,7 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
 
   const openManage = (court: Court, reservationId: string, start: string, end: string) => {
     setMessage(null);
-    setPending({
-      type: "manage",
-      reservationId,
-      courtName: courtDisplayName(court, t),
-      start,
-      end,
-      cancellable: canCancel(date, settings),
-    });
+    setPending({ type: "manage", reservationId, courtName: courtDisplayName(court, t), start, end });
   };
 
   const submitBooking = async () => {
@@ -459,6 +452,15 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
               </button>
               <button
                 type="button"
+                onClick={discardReservation}
+                disabled={submitting}
+                className="flex items-center justify-center gap-1 rounded-md border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+                {t("reserve.discardBooking")}
+              </button>
+              <button
+                type="button"
                 onClick={() =>
                   setPending({
                     type: "qr",
@@ -473,17 +475,6 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
                 <QrCode className="h-4 w-4" aria-hidden />
                 {t("reserve.showQr")}
               </button>
-              {pending.cancellable && (
-                <button
-                  type="button"
-                  onClick={discardReservation}
-                  disabled={submitting}
-                  className="flex items-center justify-center gap-1 rounded-md border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden />
-                  {t("reserve.discardBooking")}
-                </button>
-              )}
             </div>
           </div>
         </div>
