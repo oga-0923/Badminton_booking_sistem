@@ -430,39 +430,39 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
         <p className="text-slate-500">{t("reserve.loading")}</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-          <table className="w-full min-w-[480px] border-collapse text-sm">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-900">
-                <th className="border-b border-slate-200 px-3 py-2 text-left font-medium dark:border-slate-800">
-                  {t("reserve.time")}
+                <th className="border-b border-slate-200 px-2 py-2 text-left font-medium dark:border-slate-800">
+                  {t("reserve.court")}
                 </th>
-                {courts.map((court) => (
+                {slots.map((slot) => (
                   <th
-                    key={court.id}
-                    className="border-b border-slate-200 px-3 py-2 text-left font-medium dark:border-slate-800"
+                    key={slot.start}
+                    className="border-b border-slate-200 px-2 py-2 text-center font-medium dark:border-slate-800"
                   >
-                    {courtDisplayName(court, t)}
+                    {slot.start}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {slots.map((slot) => {
-                const bookable = isSlotBookable(date, slot.start);
+              {courts.map((court) => {
+                const closed = closedCourtIds.has(court.id);
                 return (
-                  <tr key={slot.start} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
-                    <td className="px-3 py-2 font-medium text-slate-500">
-                      {slot.start}–{slot.end}
+                  <tr key={court.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                    <td className="whitespace-nowrap px-2 py-2 font-medium text-slate-500">
+                      {courtDisplayName(court, t)}
                     </td>
-                    {courts.map((court) => {
+                    {slots.map((slot) => {
                       const own = findOwn(court.id, slot.start);
                       const occupied = findOccupancy(court.id, slot.start);
-                      const closed = closedCourtIds.has(court.id);
+                      const bookable = isSlotBookable(date, slot.start);
 
                       if (closed) {
                         return (
-                          <td key={court.id} className="px-3 py-2">
-                            <span className="block w-full rounded-md bg-slate-50 px-2 py-1.5 text-center text-slate-300 dark:bg-slate-900 dark:text-slate-600">
+                          <td key={slot.start} className="px-1 py-1.5">
+                            <span className="block rounded-md bg-slate-50 px-1 py-1.5 text-center text-[11px] text-slate-300 dark:bg-slate-900 dark:text-slate-600">
                               {t("reserve.closed")}
                             </span>
                           </td>
@@ -471,11 +471,11 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
 
                       if (own) {
                         return (
-                          <td key={court.id} className="px-3 py-2">
+                          <td key={slot.start} className="px-1 py-1.5">
                             <button
                               type="button"
                               onClick={() => openManage(court, own.id, slot.start, slot.end)}
-                              className="flex w-full items-center justify-center gap-1 rounded-md bg-emerald-100 px-2 py-1.5 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-200"
+                              className="w-full rounded-md bg-emerald-100 px-1 py-1.5 text-[11px] text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-200"
                             >
                               {t("reserve.yourBooking")}
                             </button>
@@ -485,8 +485,8 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
 
                       if (occupied) {
                         return (
-                          <td key={court.id} className="px-3 py-2">
-                            <span className="block w-full rounded-md bg-slate-100 px-2 py-1.5 text-center text-slate-400 dark:bg-slate-800">
+                          <td key={slot.start} className="px-1 py-1.5">
+                            <span className="block rounded-md bg-slate-100 px-1 py-1.5 text-center text-[11px] text-slate-400 dark:bg-slate-800">
                               {t("reserve.booked")}
                             </span>
                           </td>
@@ -495,8 +495,8 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
 
                       if (!bookable) {
                         return (
-                          <td key={court.id} className="px-3 py-2">
-                            <span className="block w-full rounded-md bg-slate-50 px-2 py-1.5 text-center text-slate-300 dark:bg-slate-900 dark:text-slate-600">
+                          <td key={slot.start} className="px-1 py-1.5">
+                            <span className="block rounded-md bg-slate-50 px-1 py-1.5 text-center text-slate-300 dark:bg-slate-900 dark:text-slate-600">
                               —
                             </span>
                           </td>
@@ -504,11 +504,11 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
                       }
 
                       return (
-                        <td key={court.id} className="px-3 py-2">
+                        <td key={slot.start} className="px-1 py-1.5">
                           <button
                             type="button"
                             onClick={() => openBookConfirm(court, slot.start, slot.end)}
-                            className="w-full rounded-md border border-emerald-300 px-2 py-1.5 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950"
+                            className="w-full rounded-md border border-emerald-300 px-1 py-1.5 text-[11px] text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-950"
                           >
                             {t("reserve.available")}
                           </button>
