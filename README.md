@@ -90,3 +90,5 @@ types/database.ts            # テーブル型定義
 
 - `reservations` テーブルに `(court_id, reservation_date, start_time)` の部分ユニークインデックス(`status in ('pending_payment','confirmed')`)を設定し、同時アクセスでも二重予約が発生しないようにしています。
 - Stripe 連携後は決済確定まで `status = 'pending_payment'` とし、`hold_expires_at` を過ぎた仮予約は `expire_stale_reservations()` 関数(pg_cron 等での定期実行を想定)で自動失効させる設計です。MVPでは決済ステップがないため、予約は即座に `confirmed` になります。
+
+<!-- redeploy trigger -->
