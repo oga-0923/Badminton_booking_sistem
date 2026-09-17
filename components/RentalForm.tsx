@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
+import { Loader2 } from "lucide-react";
 import type { Equipment, EquipmentLoan } from "@/types/database";
 
 interface RentalFormProps {
@@ -113,8 +114,9 @@ export function RentalForm({ equipment, myLoans, isFree, feePerItem }: RentalFor
                   type="button"
                   onClick={() => handleSubmit(item)}
                   disabled={item.available < 1 || submittingId === item.id}
-                  className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                  className="flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
+                  {submittingId === item.id && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />}
                   {t("rental.submit")}
                 </button>
               </div>

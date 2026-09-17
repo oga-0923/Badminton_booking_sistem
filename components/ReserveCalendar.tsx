@@ -8,7 +8,7 @@ import { buildTimeSlots } from "@/lib/reservation/slots";
 import { courtDisplayName } from "@/lib/reservation/court-label";
 import { isSlotBookable } from "@/lib/reservation/rules";
 import { formatLocalDate } from "@/lib/date";
-import { X, QrCode } from "lucide-react";
+import { X, QrCode, Loader2 } from "lucide-react";
 import type { Court, Equipment, VenueSettings } from "@/types/database";
 
 interface ReserveCalendarProps {
@@ -596,8 +596,9 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
                   (racket ? racketQty > racket.available : false) ||
                   (shuttle ? shuttleQty > shuttle.available : false)
                 }
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                className="flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
               >
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                 {t("common.confirm")}
               </button>
             </div>
@@ -636,7 +637,11 @@ export function ReserveCalendar({ userId, courts, settings }: ReserveCalendarPro
                 disabled={submitting}
                 className="flex items-center justify-center gap-1 rounded-md border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
               >
-                <X className="h-3.5 w-3.5" aria-hidden />
+                {submitting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                )}
                 {t("reserve.discardBooking")}
               </button>
               <button

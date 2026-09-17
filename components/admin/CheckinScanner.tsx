@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 import { useI18n } from "@/lib/i18n/context";
 import { formatLocalDate } from "@/lib/date";
+import { Loader2 } from "lucide-react";
 import type { EquipmentType, ReservationStatus } from "@/types/database";
 
 interface CheckinInfo {
@@ -196,8 +197,9 @@ export function CheckinScanner() {
                 type="button"
                 onClick={approve}
                 disabled={busy}
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                className="flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
               >
+                {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                 {t("admin.allowEntry")}
               </button>
             </div>

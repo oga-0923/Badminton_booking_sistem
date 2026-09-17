@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useI18n } from "@/lib/i18n/context";
 import { createClient } from "@/lib/supabase/client";
 import { isAllowedUniversityEmail } from "@/lib/auth/email-domain";
+import { Loader2 } from "lucide-react";
 
 export default function SignupPage() {
   const { t } = useI18n();
@@ -103,8 +104,9 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={loading}
-          className="rounded-md bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+          className="flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
         >
+          {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
           {t("auth.submitSignup")}
         </button>
       </form>

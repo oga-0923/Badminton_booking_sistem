@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import { courtDisplayName } from "@/lib/reservation/court-label";
+import { Loader2 } from "lucide-react";
 import type { Court, EquipmentType, ReservationStatus } from "@/types/database";
 
 interface ReservationRow {
@@ -229,8 +230,9 @@ export function PaymentsAdmin({ reservations, loans }: { reservations: Reservati
                 type="button"
                 onClick={() => confirmPending("pay")}
                 disabled={busy}
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                className="flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
               >
+                {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
                 {t("admin.markPaid")}
               </button>
             </div>
